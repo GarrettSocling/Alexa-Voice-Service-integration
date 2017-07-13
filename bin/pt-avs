@@ -1,0 +1,140 @@
+#!/bin/bash -e
+
+usage() { echo "Usage: $0 <record | upload | playback | pt-access-token | avs-access-token | pt-avs-link>" 1>&2; exit 1; }
+record_usage() { echo -e "Usage: $0 record <start | stop>" 1>&2; exit 1; }
+upload_usage() { echo -e "Usage: $0 upload <options>\n\t-t\t[AVS access token]" 1>&2; exit 1; }
+avs_access_token_usage() { echo -e "Usage: $0 avs-access-token <options>\n\t-u\t[pi-top account username]\n\t-t\t[pi-top account access token]" 1>&2; exit 1; }
+pt_access_token_usage() { echo -e "Usage: $0 pt-access-token [options]\n\t-u\t[pi-top account username]\n\t-p\t[pi-top account password]" 1>&2; exit 1; }
+
+
+AVS_LIB_DIR="/usr/lib/pt-avs"
+
+RECORD_SCRIPT="$AVS_LIB_DIR/run/audio/start-stop-record.sh"
+UPLOAD_SCRIPT="$AVS_LIB_DIR/run/avs/upload-req-download-resp.sh"
+PLAYBACK_SCRIPT="$AVS_LIB_DIR/run/audio/playback-and-cleanup.sh"
+PT_ACCESS_SCRIPT="$AVS_LIB_DIR/run/auth/get-pt-user-id-and-access-token-with-pt-login.sh"
+AVS_ACCESS_SCRIPT="$AVS_LIB_DIR/run/auth/get-avs-access-token-with-pt-user-id-and-pt-access-token.sh"
+PT_AVS_LINK_SCRIPT="$AVS_LIB_DIR/setup/open-browser.sh"
+
+
+do_record() {
+    if [[ "$1" != "start" ]] && [[ "$1" != "stop" ]]; then
+        record_usage
+    else
+        $RECORD_SCRIPT "$1"
+    fi
+}
+
+do_upload() {
+    local OPTIND o a
+    while getopts ":t:" o; do
+        case "${o}" in
+            t)
+                export AVS_ACCESS_TOKEN=${OPTARG}
+                ;;
+            *)
+                upload_usage
+                ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    if [ -z "$AVS_ACCESS_TOKEN" ]; then
+        upload_usage
+    fi
+    $UPLOAD_SCRIPT
+}
+
+do_playback() {
+    $PLAYBACK_SCRIPT
+}
+
+do_pt_access_token() {
+    local OPTIND o a
+    while getopts ":u:p:" o; do
+        case "${o}" in
+            u)
+                export PT_USERNAME=${OPTARG}
+                ;;
+            t)
+                export PT_PASSWORD=${OPTARG}
+                ;;
+            *)
+                pt_access_token_usage
+                ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    $PT_ACCESS_SCRIPT "$@"
+    exit $?
+}
+
+do_avs_access_token() {
+    local OPTIND o a
+    while getopts ":u:t:" o; do
+        case "${o}" in
+            u)
+                export PT_USER_ID=${OPTARG}
+                ;;
+            t)
+                export PT_ACCESS_TOKEN=${OPTARG}
+                ;;
+            *)
+                avs_access_token_usage
+                ;;
+        esac
+    done
+    shift $((OPTIND-1))
+    if [ -z "$PT_USER_ID" ] || [ -z "$PT_ACCESS_TOKEN" ]; then
+        avs_access_token_usage
+    fi
+    $AVS_ACCESS_SCRIPT
+    exit $?
+}
+
+do_pt_avs_link() {
+    $PT_AVS_LINK_SCRIPT
+}
+
+if [ $# -eq 0 ]; then
+    usage
+else
+    while [ $# -gt 0 ]; do
+        key="$1"
+
+        case $key in
+            record)
+                shift
+                do_record "$@"
+                break
+            ;;
+            upload)
+                shift
+                do_upload "$@"
+                break
+            ;;
+            playback)
+                shift
+                do_playback "$@"
+                break
+            ;;
+            pt-access-token)
+                shift
+                do_pt_access_token "$@"
+                break
+            ;;
+            avs-access-token)
+                shift
+                do_avs_access_token "$@"
+                break
+            ;;
+            pt-avs-link)
+                shift
+                do_pt_avs_link "$@"
+                break
+            ;;
+            *)
+                usage
+            ;;
+        esac
+    done
+fi
